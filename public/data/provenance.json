@@ -1,0 +1,37 @@
+{
+  "retrieved": "2026-09-25",
+  "files": [
+    {
+      "name": "traffic.csv",
+      "sha256": "8fc89f3a85669b0bd5c46520045b2501a56d4516c09c7e7e7069afcd2c66419b"
+    },
+    {
+      "name": "routes.csv",
+      "sha256": "9f1ff6b7caaf646e277233ff6ef4ad1e5c8d26450920c69d8ad6ad3514eed8a4"
+    },
+    {
+      "name": "bmd.json",
+      "sha256": "8515b8c048fb849f17c14294fa02bce393ed7e592aa19fcbffce23c9bed0ffe0"
+    },
+    {
+      "name": "uvh.json",
+      "sha256": "7a575d1131cd8dea32e736b1919a4e073dae328d1a7c9d4842f65bfb60c43a92"
+    },
+    {
+      "name": "bmd-files.json",
+      "sha256": "e31cbdc6b4a83350660780f928d5fb4c2c6da0cb574f82bf538bd6cecbfbeb56"
+    },
+    {
+      "name": "uvh-000-files.json",
+      "sha256": "5df0bf551125304f3bb4e1fea9b33ca53ca44d6c8c1660c465c6e70223713bf0"
+    },
+    {
+      "name": "crashes.json",
+      "sha256": "624f3b9772284c4b285c75fa4bfbc365e0d12dcc2ce102512ac7095daa3cab04"
+    },
+    {
+      "name": "corridors.json",
+      "sha256": "9c1f55ee340d4dbd4c55bc4e598720a9a4f78f203b6f9db682dcc5d38ec8b2e0"
+    }
+  ]
+}
