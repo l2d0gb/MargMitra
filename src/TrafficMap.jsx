@@ -26,7 +26,7 @@ export default function TrafficMap({network,route,layer,focus,junctions=[],hero=
  },[network,route,layer,junctions.length,reports,oldPoints]);
  useEffect(()=>{setMoving(false);setProgress(0);if(vehicleMarker.current){vehicleMarker.current.remove();vehicleMarker.current=null;}if(!route||hero||!map.current)return;
   map.current.fitBounds(route.points,{padding:[45,80],maxZoom:14});
-  vehicleMarker.current=L.marker(route.points[0],{zIndexOffset:1500,icon:L.divIcon({className:'journey-vehicle',html:'<span aria-hidden="true">➤</span>',iconSize:[28,28],iconAnchor:[14,14]})}).bindTooltip('Simulated vehicle · not live GPS').addTo(map.current);
+  vehicleMarker.current=L.marker(route.points[0],{zIndexOffset:1500,icon:L.divIcon({className:'journey-vehicle',html:'<span aria-hidden="true">➤</span>',iconSize:[28,28],iconAnchor:[14,14]})}).bindTooltip('Journey preview').addTo(map.current);
  },[route?.id,hero]);
  useEffect(()=>{const p=positionAlong(metrics,progress);if(p)vehicleMarker.current?.setLatLng(p);onJourney?.({progress,moving});},[metrics,progress,moving]);
  useEffect(()=>{if(!command)return;if(command.action==='restart'||command.action==='reset')setProgress(0);setMoving(command.action==='start'||command.action==='restart');},[command]);
@@ -36,6 +36,6 @@ export default function TrafficMap({network,route,layer,focus,junctions=[],hero=
  },[moving,route?.id]);
  useEffect(()=>{const c=network.find(n=>n.id===focus);if(c?.points.length&&map.current)map.current.fitBounds(c.points,{padding:[45,80],maxZoom:13});},[focus]);
  return <><div ref={el} className="traffic-map" aria-label="Interactive Bengaluru traffic map"/>{tileError&&<span className="tile-note">Basemap unavailable · cached road routes remain available</span>}{!hero&&<button className="map-reset" aria-label="Fit Bengaluru network" title="Fit Bengaluru network" onClick={()=>map.current.fitBounds(network.flatMap(c=>c.points),{padding:[25,25]})}><Maximize2 size={16}/></button>}
- {!hero&&route&&<div className="journey-controls"><button disabled={locked} aria-label={moving?'Pause journey':'Simulate journey'} onClick={()=>{if(progress>=1)setProgress(0);setMoving(!moving)}}>{moving?<Pause size={14}/>:<Play size={14}/>} {moving?'Pause journey':progress>=1?'Replay journey':'Simulate journey'}</button><button aria-label="Reset journey" onClick={()=>{setMoving(false);setProgress(0)}}><RotateCcw size={14}/></button><span>{Math.round(progress*100)}% · {progress>=1?'Arrived':'30-second preview'}</span><progress aria-label="Journey progress" value={progress} max="1"/></div>}
+ {!hero&&route&&<div className="journey-controls"><button disabled={locked} aria-label={moving?'Pause journey':'Preview journey'} onClick={()=>{if(progress>=1)setProgress(0);setMoving(!moving)}}>{moving?<Pause size={14}/>:<Play size={14}/>} {moving?'Pause journey':progress>=1?'Replay journey':'Preview journey'}</button><button aria-label="Reset journey" onClick={()=>{setMoving(false);setProgress(0)}}><RotateCcw size={14}/></button><span>{Math.round(progress*100)}% · {progress>=1?'Arrived':'30-second preview'}</span><progress aria-label="Journey progress" value={progress} max="1"/></div>}
  </>;
 }
