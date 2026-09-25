@@ -1,3 +1,4 @@
+import {roadRouteOptions} from './road-routing.mjs';
 export const places = {
   'MG Road': [12.9756,77.6068], 'Hebbal': [13.0358,77.5970], 'Indiranagar': [12.9784,77.6408],
   'Marathahalli': [12.9569,77.7011], 'Silk Board': [12.9177,77.6238], 'Koramangala': [12.9352,77.6245],
@@ -25,34 +26,34 @@ export const corridors = [
 export const trafficState = n => n < 25 ? 'LOW' : n < 50 ? 'MODERATE' : n < 75 ? 'HIGH' : 'CRITICAL';
 export const color = n => n < 25 ? '#48d6bd' : n < 50 ? '#ebc16c' : n < 75 ? '#f2955f' : '#f26978';
 export const densityState = n => n <= 10 ? 'LOW' : n <= 30 ? 'MEDIUM' : 'HIGH';
-export function networkAt(data,index){
+export function networkAt(data,index,roads){
   const frame=data.frames[index]; const previous=data.frames[Math.max(0,index-1)];
-  const observed=Object.values(frame.routes); const mean=observed.reduce((s,r)=>s+r.speed,0)/Math.max(1,observed.length);
-  return corridors.map((c,i)=>{
-    const reading=frame.routes[c.code]; const speed=reading?.speed ?? Math.max(8,mean*(0.78+(i%4)*.12));
-    const congestion=Math.max(0,Math.min(95,Math.round((1-speed/45)*100)));
-    const prev=previous.routes[c.code]?.speed ?? speed; const forecast=Math.max(5,Math.min(55,speed+(speed-prev)*.4));
+  const observed=Object.values(frame.readings||frame.routes); const mean=observed.reduce((s,r)=>s+r.speed,0)/Math.max(1,observed.length);
+  const network=corridors.map((c,i)=>{
+    const sourceName=c.name==='Bellary Road'?'Ballari Road':c.name;
+    const reading=data.kind==='kaggle'?frame.readings[sourceName]:frame.routes[c.code]; const speed=reading?.speed ?? Math.max(8,mean*(0.78+(i%4)*.12));
+    const congestion=reading?.congestion??Math.max(0,Math.min(95,Math.round((1-speed/45)*100)));
+    const prev=(data.kind==='kaggle'?previous.readings[sourceName]:previous.routes[c.code])?.speed ?? speed; const forecast=Math.max(5,Math.min(55,speed+(speed-prev)*.4));
     return {...c,speed:Math.round(speed*10)/10,congestion,forecast:Math.round(forecast*10)/10,state:trafficState(congestion),observed:!!reading,
-      sourceDuration:reading?.duration,sourceDistance:reading?.distance,minutes:c.km/speed*60,points:[places[c.a],...c.via,places[c.b]]};
+      sourceDuration:reading?.duration,sourceDistance:reading?.distance,minutes:c.km/speed*60,points:roads?.pairs?.[`${c.a}|${c.b}`]?.[0]?.points||[]};
   });
+  network.source=data.source;
+  network.readings=data.kind==='kaggle'?Object.fromEntries(Object.entries(frame.readings).map(([name,r])=>[name,{...r,forecast:Math.max(5,Math.min(55,r.speed+(r.speed-(previous.readings[name]?.speed??r.speed))*.4))}])):Object.fromEntries(network.filter(c=>c.observed).map(c=>[c.name,c]));
+  return network;
 }
-export function routeOptions(network,origin,destination,vehicle='Normal'){
+export function routeOptions(network,origin,destination,vehicle='Normal',roads){
   if(origin===destination)return [];
-  const candidates=[]; const emergency=vehicle!=='Normal';
-  function visit(at,path,seen){
-    if(at===destination){const minutes=path.reduce((s,e)=>s+e.minutes,0);const congestion=path.reduce((s,e)=>s+e.congestion,0)/path.length;
-      const bottlenecks=path.filter(e=>e.congestion>=65).length;
-      const score=minutes + congestion*(emergency?.13:.045) + bottlenecks*(emergency?4:1)+Math.max(0,path.length-2)*1.5;
-      candidates.push({edges:path,minutes:Math.round(minutes),km:Math.round(path.reduce((s,e)=>s+e.km,0)*10)/10,congestion:Math.round(congestion),bottlenecks,score});return;}
-    if(path.length>=7)return;
-    for(const edge of network){const next=edge.a===at?edge.b:edge.b===at?edge.a:null;if(!next||seen.has(next))continue;visit(next,[...path,{...edge,from:at,to:next,points:edge.a===at?edge.points:[...edge.points].reverse()}],new Set([...seen,next]));}
-  }
-  visit(origin,[],new Set([origin]));
-  return candidates.sort((a,b)=>a.score-b.score).slice(0,3).map((r,i)=>({...r,id:r.edges.map(e=>e.id).join('-'),rank:i+1}));
+  if(roads)return roadRouteOptions(network,roads,origin,destination,vehicle);
+  return [];
+
 }
 export function lookahead(route){
   if(!route)return [];
-  // Interpolate decision points along the continuous demonstration route, even for short paths.
+  if(route.roadFollowing){
+    const steps=route.edges.filter(e=>!['arrive','depart','notification','new name'].includes(e.maneuver.type)&&e.distance>20).slice(0,3);
+    return [route.edges[0],...steps].filter(Boolean).map((e,i)=>{const predicted=Math.max(0,Math.min(95,Math.round((1-e.forecast/45)*100)));return {name:i===0?route.from:`${e.maneuver.modifier||e.maneuver.type} · ${e.name}`,position:i===0?route.points[0]:e.maneuver.position,current:e.state,predicted:trafficState(predicted),delay:Math.round(Math.max(0,e.minutes-e.distance/1000/45*60)),bottleneck:predicted>=65,action:predicted>=65?'Prepare priority passage':predicted>=40?'Coordinate junction approach':'Maintain corridor readiness'};});
+  }
+  // Legacy checkpoints are not used by the road-following interface.
   const points=route.edges.flatMap((e,i)=>e.points.slice(i?1:0).map(p=>({p,e})));
   return Array.from({length:4},(_,i)=>{const {e,p}=points[Math.min(points.length-1,Math.round(i*(points.length-1)/3))];const predicted=Math.max(0,Math.min(95,Math.round((1-e.forecast/45)*100)));
     return {name:i===0?e.from:i===3?route.edges.at(-1).to:`${e.name} · checkpoint ${i}`,position:p,current:e.state,predicted:trafficState(predicted),delay:Math.round(Math.max(0,e.km/e.forecast*60-e.km/45*60)/Math.max(1,e.points.length-1)),bottleneck:predicted>=65,action:predicted>=65?'Prepare priority passage':predicted>=40?'Coordinate junction approach':'Maintain corridor readiness'};});
@@ -61,19 +62,19 @@ export const initialFleet=()=>[
   {id:'AMB-01',location:'Koramangala',status:'EN ROUTE'}, {id:'AMB-02',location:'Silk Board',status:'AVAILABLE'},
   {id:'AMB-03',location:'Hebbal',status:'AVAILABLE'},{id:'AMB-04',location:'Jayanagar',status:'AVAILABLE'},{id:'AMB-05',location:'Indiranagar',status:'MAINTENANCE'}
 ];
-export function replacements(fleet,failedId,network,incident){return fleet.filter(u=>u.id!==failedId&&u.status==='AVAILABLE').map(u=>{
-  const route=u.location===incident?null:routeOptions(network,u.location,incident,'Ambulance')[0];
+export function replacements(fleet,failedId,network,incident,roads){return fleet.filter(u=>u.id!==failedId&&u.status==='AVAILABLE').map(u=>{
+  const route=u.location===incident?null:routeOptions(network,u.location,incident,'Ambulance',roads)[0];
   return {...u,response:u.location===incident?2:route?route.minutes+2:Infinity};}).filter(u=>Number.isFinite(u.response)).sort((a,b)=>a.response-b.response);}
 export function answerFromState(question,state){
   const q=question.toLowerCase();const most=[...state.traffic].sort((a,b)=>b.congestion-a.congestion)[0];let parts=[];
   const match=state.traffic.find(c=>q.includes(c.name.toLowerCase())||q.includes(c.id));
-  if(/route|select|recommend|change|why|fast|journey/.test(q)){const r=state.route;parts.push(r?`The selected ${state.vehicleType.toLowerCase()} route uses ${r.edges.map(e=>e.name).join(' → ')}: ${r.km} km, approximately ${r.minutes} min, ${r.congestion}% congestion and ${r.bottlenecks} bottleneck(s). Ranking balances modeled travel time, congestion and continuity${state.vehicleType!=='Normal'?', with extra penalties for bottlenecks in emergency mode':''}. These are illustrative graph routes, not turn-by-turn navigation.`:'Choose different origin and destination locations to generate a route.');}
-  if(/congest|traffic|slow|busy|corridor|speed/.test(q)){const c=match||most;parts.push(`${c.name} ${match?'is':'has the highest modeled congestion in this frame at'} ${c.congestion}% (${c.state}), with ${c.speed} km/h speed and a ${c.forecast} km/h 15-minute trend estimate. ${c.observed?'Speed comes from the historical route observation.':'This corridor uses an explicitly modeled network speed.'}`);}
-  if(/junction|lookahead|checkpoint|bottleneck/.test(q)){const n=Number(q.match(/(?:junction|checkpoint)\s*\+?\s*(\d)/)?.[1]||2);const j=state.upcomingJunctions[n];parts.push(j?`Junction +${n}: ${j.name}. Current ${j.current}; predicted ${j.predicted}; modeled delay +${j.delay} min. ${j.action}. Checkpoints are illustrative decision-support locations; no traffic signals are controlled.`:'Activate an emergency vehicle type to see the junction lookahead.');}
+  if(/route|select|recommend|change|why|fast|journey/.test(q)){const r=state.route;parts.push(r?`The selected ${state.vehicleType.toLowerCase()} route uses ${(r.roadNames||r.edges.map(e=>e.name)).join(' → ')}: ${r.km} km, approximately ${r.minutes} min, ${r.congestion}% congestion and ${r.bottlenecks} bottleneck(s). Ranking balances modeled travel time, congestion and bottlenecks${state.vehicleType!=='Normal'?', with extra penalties for bottlenecks in emergency mode':''}. Road geometry follows OpenStreetMap via OSRM. ${r.matchedPercent}% of the distance matches the selected traffic source; unmatched sections use OSRM driving-profile estimates. Movement is simulated, not live navigation.`:'Choose different origin and destination locations to generate a route.');}
+  if(/congest|traffic|slow|busy|corridor|speed/.test(q)){const c=match||most;parts.push(`${c.name} ${match?'is':'has the highest modeled congestion in this frame at'} ${c.congestion}% (${c.state}), with ${c.speed} km/h speed and a ${c.forecast} km/h ${state.datasetInformation?.trafficKind==='kaggle'?'next-record':'15-minute'} trend estimate. ${c.observed?'Speed comes from the selected historical dataset; source coverage is documented in Data & methodology.':'This corridor uses an explicitly modeled network speed.'}`);}
+  if(/junction|lookahead|checkpoint|bottleneck/.test(q)){const n=Number(q.match(/(?:junction|checkpoint)\s*\+?\s*(\d)/)?.[1]||2);const j=state.upcomingJunctions[n];parts.push(j?`Junction +${n}: ${j.name}. Current ${j.current}; predicted ${j.predicted}; modeled delay +${j.delay} min. ${j.action}. Checkpoints are OSRM road maneuvers, not verified traffic-signal locations; no signals are controlled.`:'Activate an emergency vehicle type to see the junction lookahead.');}
   if(/ambulance|unavailable|fleet|dispatch|replacement/.test(q))parts.push(`Fleet: ${state.ambulanceStatus.map(u=>`${u.id} ${u.status.toLowerCase()}`).join('; ')}. ${state.emergencyStatus||'Simulate a unit becoming unavailable to compare available replacements by modeled response time. Acknowledgement changes only this demo fleet.'}`);
   if(/density|vehicle|composition|car|bike|bus|truck/.test(q))parts.push(state.density?`The independent ${state.density.dataset} sample has ${state.density.total} annotated vehicles (${densityState(state.density.total)} density): ${Object.entries(state.density.composition).map(([k,v])=>`${k}: ${v}`).join(', ')}. Image samples are not synchronized with the replay and cannot establish which vehicles caused congestion.`:'Vehicle annotations are unavailable.');
   if(/safety|crash|accident/.test(q))parts.push(state.safety?`Historical safety intelligence: the ${state.safety.year} OpenCity / Bengaluru Traffic Police table reports ${state.safety.totalCrashes} total crashes and ${state.safety.fatalCrashes} fatal crashes across ${state.safety.stations.length} stations. Fatal crashes are events, not a count of people killed. Station aggregates are not geocoded crash locations and cannot establish route safety or predict accidents.`:'Historical safety records are not loaded. No crash-hotspot, route-safety or accident-prediction claim can be made.');
-  if(/data|source|history|historical|forecast|predict/.test(q))parts.push(`Replay timestamp: ${state.timestamp} IST. Traffic Monitor Lizard observations are bundled locally. Forecasts use the current speed plus 0.4 times the change from the previous frame; this heuristic is not a validated predictive model. Density uses a separate seed-42 sample from BMD-45-Train / UVH-26-Train.`);
-  if(!parts.length)parts.push(`I cannot answer “${question}” from the available system data. At ${state.timestamp} IST, ${most.name} is the most congested modeled corridor (${most.congestion}%). I can explain the current route, congestion, forecast, density annotations, emergency checkpoints, fleet or data limitations.`);
+  if(/data|source|history|historical|forecast|predict/.test(q))parts.push(`Replay record: ${state.timestamp}. Selected traffic source: ${state.datasetInformation?.traffic||'historical dataset'}. Road geometry is cached from OpenStreetMap / OSRM. Kaggle daily records have no time-of-day or verified collection methodology. Forecasts use the current speed plus 0.4 times the change from the previous frame; this heuristic is not a validated predictive model. Density uses a separate seed-42 sample from BMD-45-Train / UVH-26-Train.`);
+  if(!parts.length)parts.push(`I cannot answer “${question}” from the available system data. At ${state.timestamp}, ${most.name} is the most congested modeled corridor (${most.congestion}%). I can explain the current route, congestion, forecast, density annotations, emergency checkpoints, fleet or data limitations.`);
   return parts.join('\n\n');
 }

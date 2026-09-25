@@ -26,29 +26,33 @@ After building, Express serves the production app at http://127.0.0.1:3001. The 
 ## Demo path
 
 1. Open the Command Center; advance the historical replay or play it at 0.5–4×.
-2. Choose origin, destination and vehicle, then find a route. Compare or select the three ranked alternatives.
-3. Select Ambulance, Fire, Police or Emergency to expose current + three upcoming illustrative checkpoints.
-4. Open Demo fleet, select AMB-02, and simulate unit unavailable. Available units are ranked by graph ETA + two-minute preparation time.
+2. Choose origin, destination and vehicle, then find a route. Compare available OSRM alternatives. Select a traffic dataset, then use Simulate journey for a 30-second preview along the actual road path.
+3. Select Ambulance, Fire, Police or Emergency to expose the current position and up to three upcoming road maneuvers.
+4. Open Demo fleet, select AMB-02, and simulate unit unavailable. Available units are ranked by road-route ETA + two-minute preparation time.
 5. Acknowledge dispatch to mark the recommendation EN ROUTE in the demo only. Repeat disruptions to exercise the no-replacements state.
 6. Ask a free-text question. The question is answered using a snapshot of traffic, forecast, density, route, vehicle, checkpoints, fleet, safety and data information.
 7. Reset demo restores the starting state. Data & methodology includes a station selector and source downloads.
 
 ## Data and provenance
 
+- **Kaggle / Preetham Gouda / Bangalore's Traffic Pulse**, version 1, CC0: https://www.kaggle.com/datasets/preethamgouda/banglore-city-traffic-dataset. 8,936 records across 952 dates, 2022-01-01 through 2024-08-09, covering 16 named roads/intersections. Community-uploaded daily historical data; collection methodology is not independently verified. No coordinates or time-of-day are supplied. `scripts/prepare-kaggle.py` transforms the source CSV into bundled daily frames.
+- **OpenStreetMap via OSRM**, ODbL attribution: `public/data/roads.json` caches driving routes for all 132 directional pairs among the 12 selectable locations, including returned alternatives and maneuver geometry. `scripts/prepare-roads.mjs` regenerates the cache with paced requests. Reverse journeys are independently routed for one-way roads.
+
 - **Traffic Monitor Lizard / Mahesh Shantaram (2026)**: https://github.com/thecont1/traffic-monitor-lizard, CC BY 4.0. 72 historical snapshots from 2026-09-24. Extracted from `data/csv-traffic-bangalore.csv`; speeds calculated from recorded distance and duration. Attribution/license preserved in `public/data/TRAFFIC-LICENSE.md`. `provenance.json` records downloaded source hashes.
 - **Hugging Face / kalyan1729 / trafficmanagementdataset**: 50 BMD-45-Train and 50 UVH-26-Train images, COCO annotation counts. Python random.Random(42), stratified across image-id order among annotation matches in the first 1,000 hosted file entries in BMD images_000 and UVH data/000. This is an availability-constrained sample, not a representative citywide sample. Images resized to at most 640×360. Source license metadata is retained in density.json. No test/validation/video, DETRAC or IITM-HeTra_v2 data is included.
 - **OpenCity / Bengaluru Traffic Police**: https://data.opencity.in/dataset/bengaluru-road-crashes-data, 2024 station table. Subtotals excluded to prevent double counting: 50 stations, 4,800 total crashes and 852 fatal crashes. Fatal crashes are events, not fatalities.
 - **OpenCity / KRDCL**: https://data.opencity.in/dataset/bengaluru-high-density-corridors-documents. 2020 HDC report metadata retained in `corridor-reference.json`. This is a report reference, not imported official GIS geometry.
 
-The processed dataset is about 5 MB. Raw downloads are ignored by source control and not published. `scripts/prepare-data.py` documents the deterministic transformation and image selection; regeneration requires source CSV/COCO files and the recorded Hugging Face file listings under ignored `data-raw/`, plus Python/Pillow. The application uses only the committed processed output.
+Raw downloads are ignored by source control and not published. `scripts/prepare-data.py` documents the deterministic transformation and image selection; regeneration requires source CSV/COCO files and the recorded Hugging Face file listings under ignored `data-raw/`, plus Python/Pillow. The application uses only the committed processed output.
 
 ## Model limitations
 
-- The map is a connected, hand-authored corridor graph with approximate geometry. Source route speeds are attached to matching corridor names; segment distances and ETAs are modeled separately. It is not a navigation engine.
-- Some links have no matching observation and explicitly use a modeled speed derived from the network mean. Congestion is a demo index relative to 45 km/h, clamped to 0–95.
-- Forecast = current speed + 0.4 × (current − previous speed), clamped to 5–55 km/h. The 15-minute horizon is an unvalidated heuristic.
-- Route score = ETA + mean congestion × 0.045 (normal) or 0.13 (emergency) + bottlenecks × 1 or 4 + 1.5 per link after the first two. Paths are continuous and cycle-free, limited to seven links. The three lowest scores are shown.
-- Lookahead uses four interpolated checkpoints along the chosen graph path; locations are illustrative, not verified signalized junctions.
+- Routes use cached OSRM driving geometry. Only returned alternatives are offered; no straight-line fallback is drawn. The moving marker interpolates by distance along this path; movement is accelerated simulation, not live navigation.
+- Traffic is applied only to matching normalized road names. Matched steps use historical speed to estimate travel time. Unmatched sections retain OSRM driving-profile estimates. Route cards show the percentage of distance matched to traffic data; no neighboring road's record is substituted.
+- Kaggle provides congestion values. Other congestion estimates use a demo 45 km/h reference. Background corridor summaries without matching observations use a labeled network estimate.
+- Forecast = current speed + 0.4 × (current − previous speed), clamped to 5–55 km/h. This is an unvalidated next-record trend for daily Kaggle data (dates may have gaps), or a 15-minute heuristic for Monitor Lizard.
+- Route score = estimated minutes + distance-weighted congestion × 0.045 (normal) or 0.13 (emergency) + bottlenecks × 1 or 4.
+- Lookahead uses the current position and up to three upcoming maneuvers on the road geometry. Signal locations and status are not verified.
 - Density is an independent image sample, not tied to the replay location/time. Thresholds: 0–10 LOW, 11–30 MEDIUM, 31+ HIGH.
 - Safety data is station-level historical context, not accident prediction or a route risk score.
 - No live BTP CCTV, ambulance GPS, actual dispatch, automatic signal control, government partnership or guaranteed ETA.
@@ -62,7 +66,7 @@ To enable the Express AI adapter, set server-side `OPENAI_API_KEY` and optionall
 
 ## Verification
 
-`pnpm test` covers historical arithmetic, changing frames, all supported endpoint pairs, route continuity/cycles, emergency scoring/lookahead, replacement exclusions and empty availability, density thresholds, annotation integrity, and grounded assistant behavior.
+`pnpm test` covers historical arithmetic, changing frames, all supported endpoint pairs, cached road geometry and endpoint snapping, exact traffic matching, distance-based movement, emergency scoring/lookahead, replacement exclusions and empty availability, density thresholds, annotation integrity, and grounded assistant behavior.
 
 Browser acceptance checks: landing/navigation, replay previous/next/play/pause/speed/reset, route inputs/alternatives, emergency checkpoints, failure simulation, replacement acknowledgement, assistant current-state answer, data station selector, desktop/mobile overflow. The real AI provider is not tested without a key.
 
@@ -70,6 +74,8 @@ Browser acceptance checks: landing/navigation, replay previous/next/play/pause/s
 
 - `src/main.jsx`: React UI and coordinated state.
 - `src/engine.mjs`: pure traffic/routing/fleet/assistant logic.
+- `src/road-routing.mjs`: road-step traffic matching, ranking and path interpolation.
+- `src/TrafficMap.jsx`: road map and simulated movement.
 - `src/style.css`: responsive visual system.
 - `server.mjs`: optional Express API and production static server.
 - `public/data/`: self-contained processed data and attribution.
