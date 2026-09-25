@@ -2,5 +2,6 @@ node_modules/
 dist/
 .sites-runtime/
 .env
+.vercel/
 artifacts/
 data-raw/

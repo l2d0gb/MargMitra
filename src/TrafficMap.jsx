@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import L from 'leaflet';
 import {Maximize2,Play,Pause,RotateCcw} from 'lucide-react';
 import {color} from './engine.mjs';
+import {severityProfiles} from './severity.mjs';
 import {pathMetrics,positionAlong} from './road-routing.mjs';
 export default function TrafficMap({network,route,layer,focus,junctions=[],hero=false,reports=[],oldPoints=null,command=null,onJourney,locked=false}){
  const el=useRef(null),map=useRef(null),group=useRef(null),vehicleMarker=useRef(null);
@@ -15,7 +16,7 @@ export default function TrafficMap({network,route,layer,focus,junctions=[],hero=
  useEffect(()=>{if(!group.current)return;group.current.clearLayers();
   network.forEach(c=>{if(c.points.length<2)return;L.polyline(c.points,{color:hero?'#629992':'#617986',weight:hero?2:2.5,opacity:hero?.7:.35}).bindTooltip(`${c.a} → ${c.b} · OpenStreetMap road connection`,{sticky:true}).addTo(group.current)});
   if(oldPoints)L.polyline(oldPoints,{color:'#f47779',weight:3,dashArray:'7 7',opacity:.8}).addTo(group.current);
-  reports.forEach(r=>L.circle(r.position,{radius:60,color:'#ff6868',fillOpacity:.4}).bindTooltip('Reported accident · unverified').addTo(group.current));
+  reports.forEach(r=>L.circle(r.position,{radius:severityProfiles[r.severity]?.radius||60,color:r.severity==='low'?'#e7c36d':'#ff6868',fillOpacity:.4}).bindTooltip('Reported accident · unverified').addTo(group.current));
   if(route){
    L.polyline(route.points,{color:'#5de0d2',weight:9,opacity:.65}).addTo(group.current);
    L.polyline(route.points,{color:'#0a2028',weight:6,opacity:1}).addTo(group.current);

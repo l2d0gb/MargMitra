@@ -1,5 +1,17 @@
 # MargMitra AI
 
+## Accident photo assessment
+
+The report form accepts JPEG, PNG and WebP photos (8 MB input limit), resizes them locally, shows a preview and automatically sends the resized image for assessment after upload. `/api/assess-accident` uses a server-side OpenAI vision model with a validated structured response. No model key is bundled in the client. Images and reports are held in session memory, not persisted by this application. The provider receives the image with `store:false`; this is not a guarantee of zero provider retention.
+
+Image results estimate visible **traffic disruption**, not injury severity, fault, rescue eligibility or confirmed response needs. Uncertain/low-confidence results require a clearer photo. Citizens cannot select or override severity. Low / moderate / high profiles assume disruption of 5–15 / 20–45 / 60–120 minutes, with increasing delay, congestion and affected area. High severity blocks a 150 m area; lower levels add edge costs so the route can remain unchanged when a detour is slower. These are explicit planning assumptions, not trained closure forecasts. Response suggestions require human confirmation; no service is dispatched. Reports remain active until cleared.
+
+### Enable on Vercel
+
+Set `OPENAI_API_KEY` as a **server-side** Vercel environment variable, optionally `OPENAI_VISION_MODEL` (default `gpt-4.1-mini`), and deploy **the app root**, using `npx vercel --prod` from this directory. Do not deploy only `dist`: it excludes the image-assessment function. `vercel.json` builds the Vite frontend and includes `api/assess-accident.mjs`. Local development uses `node --env-file=.env server.mjs` plus Vite. Without an API key or on the static Sites deployment, photo assessment reports unavailable and blocks report submission until a reliable model result is available. API charges are separate from a ChatGPT subscription. Validate with representative labeled accident images before operational use.
+
+Vision API integration tests use mocked provider responses. Real-model quality has not been evaluated without configured credentials.
+
 AI-Powered Adaptive Urban Traffic & Emergency Mobility Intelligence.
 
 **Predict the traffic ahead. Prioritize the journey that matters most.**

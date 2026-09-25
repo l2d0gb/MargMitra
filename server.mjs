@@ -1,6 +1,7 @@
 import express from 'express';
 import {answerFromState} from './src/engine.mjs';
-const app=express();app.use(express.json({limit:'200kb'}));
+import assessAccident from './api/assess-accident.mjs';
+const app=express();app.post('/api/assess-accident',express.json({limit:'3mb'}),assessAccident);app.use(express.json({limit:'200kb'}));
 app.get('/api/health',(_,res)=>res.json({status:'ok',mode:process.env.OPENAI_API_KEY?'ai':'system-data-fallback'}));
 app.post('/api/assistant',async(req,res)=>{
  const {question,state}=req.body||{};
