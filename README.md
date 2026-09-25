@@ -81,3 +81,11 @@ Browser acceptance checks: landing/navigation, replay previous/next/play/pause/s
 - `public/data/`: self-contained processed data and attribution.
 - `tests/engine.test.mjs`: functional domain checks.
 - `.openai/hosting.json`: Sites deployment identity.
+
+## Citizen reports and incident response
+
+The Command Center includes a session-only accident form and a separate response panel. Select a road on the current route and submit a report. Reports are unverified; the demo models a precautionary 60 m closure and checks the remaining journey. A directed graph assembled from cached OSRM road geometry finds a detour from the current simulated position, preserving one-way directions and the destination. Travel time uses selected historical speeds on matching roads and profile estimates elsewhere. The panel shows receipt, conflict detection, remaining ETA before/after, and local estimated arrival. The previous path is red and dashed.
+
+Run mid-journey accident demo starts an ambulance and injects a labeled scripted report at 18% progress. When possible it chooses a closure ahead with a demonstrable detour. It does not teleport to the original departure point. If cached coverage cannot produce a detour, movement pauses and human review is required. Clear reports resets the journey. Changing endpoints or datasets starts a fresh incident session. Reports are not shared across browsers or sent to emergency services; no backend citizen-report database is connected. Routing is deterministic, not an LLM or verified accident detector. Remaining baseline ETA scales with path distance; simulated motion is accelerated and does not represent actual driving time.
+
+Incident tests cover current-position continuity, directed-road membership, closure avoidance, passed/off-route reports, and unavailable detours.
